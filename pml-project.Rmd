@@ -1,0 +1,128 @@
+# Practical Machine Learning
+### Course Project by Lio1      
+### Human Activity Recognition (HAR) dataset
+
+**Objective:** Predicting the manner ("classe" variable) in which the exercise was done
+
+### Data wrangling
+
+We read the data and turn the "classe" variable to factor
+```{r}
+rawTrain <- read.csv("pml-training.csv")
+rawTest <- read.csv("pml-testing.csv")
+rawTrain$classe <- as.factor(rawTrain$classe)
+```
+
+We factor variables
+```{r}
+levels(rawTest$user_name) <- levels(rawTrain$user_name)
+levels(rawTest$cvtd_timestamp) <- levels(rawTrain$cvtd_timestamp)
+levels(rawTest$new_window) <- levels(rawTrain$new_window)
+```
+
+We investigate which variables have missing values
+```{r}
+sum(sapply(rawTrain,anyNA))
+sum(sapply(rawTest,anyNA))
+```
+
+We extract variables that do not have NA's in the test set (60 vars)
+```{r}
+NAcols <- names(sapply(rawTest,anyNA)[sapply(rawTest,anyNA)==F])
+test <- rawTest[,NAcols]
+```
+
+Same operation in the train set + keeping the "classe" column
+```{r}
+train <- rawTrain[,c("classe",NAcols[1:59])]
+```
+
+We do a final check on NA's
+```{r}
+sum(sapply(train,anyNA))
+sum(sapply(test,anyNA))
+```
+
+We remove the useless variable "X"
+
+```{r}
+train$X <- NULL
+test$X <- NULL
+```
+
+### Data Partition
+
+We split the train set provided into a sub train set (75%) and a sub validation set (25%)
+```{r}
+library(caret)
+set.seed(777)
+inTrain1 <- createDataPartition(train$classe,p=0.75,list=F)
+train1 <- train[inTrain1,]
+train2 <- train[-inTrain1,]
+```
+
+### Machine Learning Algorithm
+
+We run a randomForest model and we'll use the built-in out-of-bag error estimation (Cross Validation)
+
+*Random Forest is a good choice of prediction algorithm for a problem (like this one) where we value accuracy over interpretability
+
+*The automatic calculation of the OBB error rate also makes it easy to cross-validate model accuracy without using the caret package
+
+
+```{r}
+set.seed(777)
+library(randomForest)
+set.seed(777)
+model1 <- randomForest(classe~.,data=train1)
+```
+
+### Out-of-sample error rate
+
+```{r}
+print(model1) # 
+```
+
+Our estimated OOB error rate is **0.08%** which is **extremely low**
+
+### Variable importance
+
+**cvtd_timestamp** and **raw_timestamp_part_1** are the top2 variables in termes of importances measured by the Mean Decrease in Gini Index
+
+```{r, echo=FALSE}
+varImpPlot(model1)
+```
+
+### Model validation
+
+We validate model1 on our sub-validation set
+```{r}
+predictVal <- predict(model1,newdata=train2)
+confusionMatrix(predictVal,train2$classe)
+```
+
+The obtained **accuracy of 99.92%** is in line with our OBB error rate estimation 
+
+Indeed, an estimated OOB error rate of 0.08% means an accuracy of 99.92% 
+
+### Test set prediction and submission
+
+We predict the test set "classe" 
+```{r}
+predictTest <- predict(model1, newdata=test)
+```
+
+We create the files for submission
+```{r}
+pml_write_files = function(x){
+      n = length(x)
+      for(i in 1:n){
+            filename = paste0("problem_id_",i,".txt")
+            write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+      }
+}
+
+pml_write_files(predictTest)
+```
+
+
